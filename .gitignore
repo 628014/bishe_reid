@@ -1,2 +1,10 @@
 /data/
 /checkpoint/
+/logs/
+/model/__pycache__/
+/processor/__pycache__/
+/solver/__pycache__/
+/datasets/__pycache__/
+/utils/__pycache__/
+/process/data_res/
+process/data_pre/__pycache__

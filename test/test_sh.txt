@@ -1,1 +1,1 @@
-sh finetune_wr.sh --finetune best2.pth
+sh finetune_wr.sh --finetune /home/wangrui/code/MLLM4Text-ReID-main/checkpoint/best2.pth

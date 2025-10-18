@@ -11,4 +11,4 @@ python finetune.py \
 --loss_names 'sdm+id+mlm' \
 --num_epoch 60 \
 --root_dir /home/wangrui/code/MLLM4Text-ReID-main/data \
---finetune The_pretrained_checkpoint
+--finetune /home/wangrui/code/MLLM4Text-ReID-main/checkpoint/best2.pth

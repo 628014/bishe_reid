@@ -62,7 +62,7 @@ class RSTPReid(BaseDataset):
                 img_path = op.join(self.img_dir, anno['img_path'])
                 captions = anno['captions'] # caption list
                 for caption in captions:
-                    dataset.append((pid, image_id, img_path, caption))
+                    dataset.append((pid, image_id, img_path, caption, 0.0))
                 image_id += 1
             for idx, pid in enumerate(pid_container):
                 # check pid begin from 0 and no break

@@ -92,7 +92,8 @@ class IRRA(nn.Module):
         caption_ids = text
         ori_caption_ids = ori_text
         mix_ids = torch.cat([caption_ids,ori_caption_ids],dim=0)
-        with torch.autocast(dtype=torch.float16, device_type='cuda'):
+        # with torch.autocast(dtype=torch.float16, device_type='cuda'):
+        with torch.cuda.amp.autocast():
             image_feats, text_feats = self.base_model(images, mix_ids)
         image_feats, fu_img_feats = image_feats.chunk(2,dim=0)
         text_feats, fu_txt_feats = text_feats.chunk(2,dim=0)

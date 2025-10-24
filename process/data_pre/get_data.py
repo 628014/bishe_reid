@@ -17,11 +17,16 @@ from prompt import prompt
 
 DATA_CAPTIONS_PATH = "/home/wangrui/code/MLLM4Text-ReID-main/data/RSTPReid/data_captions.json"
 DATA_CAPTIONS_TRAIN_PATH = "/home/wangrui/code/MLLM4Text-ReID-main/data/RSTPReid/data_captions_train.json"
+DATA_CAPTIONS_TEST_PATH = "/home/wangrui/code/MLLM4Text-ReID-main/data/RSTPReid/data_captions_test.json"
+DATA_CAPTIONS_VAL_PATH = "/home/wangrui/code/MLLM4Text-ReID-main/data/RSTPReid/data_captions_val.json"
 OUTPUT_PATH = "/home/wangrui/code/MLLM4Text-ReID-main/process/data_res/data_captions_train.json"
+OUTPUT_PATH_TEST = "/home/wangrui/code/MLLM4Text-ReID-main/process/data_res/data_captions_test.json"
+OUTPUT_PATH_VAL = "/home/wangrui/code/MLLM4Text-ReID-main/process/data_res/data_captions_val.json"
 IMAGES_BASE_PATH = "/home/wangrui/code/MLLM4Text-ReID-main/data/RSTPReid/imgs/"
 
 
 os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+
 
 def filter_train_data():
 
@@ -30,18 +35,33 @@ def filter_train_data():
         data = json.load(f)
     
     train_data = [item for item in data if item.get('split') == 'train']
+    test_data = [item for item in data if item.get('split') == 'test']
+    val_data = [item for item in data if item.get('split') == 'val']
+    
     print(f"筛选出的train数据数量: {len(train_data)}")
+    print(f"筛选出的test数据数量: {len(test_data)}")
+    print(f"筛选出的val数据数量: {len(val_data)}")
     
     # 保存筛选结果
     with open(DATA_CAPTIONS_TRAIN_PATH, 'w', encoding='utf-8') as f:
         json.dump(train_data, f, ensure_ascii=False, indent=2)
     print(f"train数据已保存到: {DATA_CAPTIONS_TRAIN_PATH}")
+
+    # 保存test数据
+    with open(DATA_CAPTIONS_TEST_PATH, 'w', encoding='utf-8') as f:
+        json.dump(test_data, f, ensure_ascii=False, indent=2)
+    print(f"test数据已保存到: {DATA_CAPTIONS_TEST_PATH}")
+    
+    # 保存val数据DATA_CAPTIONS_VAL_PATH
+    with open(DATA_CAPTIONS_VAL_PATH, 'w', encoding='utf-8') as f:
+        json.dump(val_data, f, ensure_ascii=False, indent=2)
+    print(f"val数据已保存到: {DATA_CAPTIONS_VAL_PATH}")
     
     return train_data
 
-def get_train_data():
+def get_train_data(path):
     """获取train数据"""
-    with open(DATA_CAPTIONS_TRAIN_PATH, 'r', encoding='utf-8') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         train_data = json.load(f)
     return train_data
 
@@ -79,15 +99,15 @@ def process_item(item, index, total):
         print(f"处理第{index+1}/{total}项时出错: {e}")
         return index, None
 
-def load_existing_results():
+def load_existing_results(path):
     """加载已存在的结果并返回已处理项的img_path集合"""
     processed_img_paths = set()
     existing_results = []
     
-    if os.path.exists(OUTPUT_PATH):
-        print(f"检测到已存在的结果文件，正在加载: {OUTPUT_PATH}")
+    if os.path.exists(path):
+        print(f"检测到已存在的结果文件，正在加载: {path}")
         try:
-            with open(OUTPUT_PATH, 'r', encoding='utf-8') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 existing_results = json.load(f)
             
             # 提取已处理的img_path
@@ -101,14 +121,14 @@ def load_existing_results():
     
     return processed_img_paths, existing_results
 
-def save_item(item, file_lock):
+def save_item(item, file_lock, path):
     """安全地保存单个处理结果到输出文件"""
     with file_lock:
         # 读取现有内容
         existing_data = []
-        if os.path.exists(OUTPUT_PATH):
+        if os.path.exists(path):
             try:
-                with open(OUTPUT_PATH, 'r', encoding='utf-8') as f:
+                with open(path, 'r', encoding='utf-8') as f:
                     existing_data = json.load(f)
             except Exception as e:
                 print(f"读取现有数据时出错: {e}")
@@ -118,18 +138,18 @@ def save_item(item, file_lock):
         existing_data.append(item)
         
         # 保存更新后的数据
-        with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+        with open(path, 'w', encoding='utf-8') as f:
             json.dump(existing_data, f, ensure_ascii=False, indent=2)
 
 def main():
    
-    processed_img_paths, existing_results = load_existing_results()
+    processed_img_paths, existing_results = load_existing_results(OUTPUT_PATH_VAL)
     
     # train_data = filter_train_data()
-    train_data = get_train_data()
+    train_data = get_train_data(DATA_CAPTIONS_VAL_PATH)
     
     # 前100条实验
-    train_data = train_data[:5000]
+    train_data = train_data
     
     # 过滤掉已处理的项
     filtered_train_data = []
@@ -162,12 +182,12 @@ def main():
             index, result = future.result()
             if result:
                 # 立即保存处理结果
-                save_item(result, file_lock)
+                save_item(result, file_lock, OUTPUT_PATH_VAL)
                 total_processed += 1
                 print(f"已处理并保存: {total_processed}项")
     
     print(f"所有数据处理完成！总共处理: {total_processed}项")
-    print(f"最终结果保存在: {OUTPUT_PATH}")
+    print(f"最终结果保存在: {OUTPUT_PATH_VAL}")
 
 if __name__ == "__main__":
     main()

@@ -7,4 +7,6 @@
 /datasets/__pycache__/
 /utils/__pycache__/
 /process/data_res/
-process/data_pre/__pycache__
+/process/data_pre/__pycache__
+/function/local_test_reid/__pycache__
+/result

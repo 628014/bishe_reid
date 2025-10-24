@@ -73,7 +73,8 @@ class IRRA(nn.Module):
                 self.ln_pre_i(v),
                 need_weights=False)[0]
         x = x.permute(1, 0, 2)  # NLD -> LND
-        x = self.cross_modal_transformer(x)
+        # x = self.cross_modal_transformer(x) 原始是这样的 2025.10.23 报错没有model的问题解决 
+        x = self.cross_modal_transformer(x, modal='text')
         x = x.permute(1, 0, 2)  # LND -> NLD
 
         x = self.ln_post(x)
@@ -92,7 +93,9 @@ class IRRA(nn.Module):
 
         images = batch['images']
         caption_ids = batch['caption_ids']
-        with torch.autocast(dtype=torch.float16, device_type='cuda'):
+        # 之前是这个，因为版本的问题 
+        # with torch.autocast(dtype=torch.float16, device_type='cuda'): 
+        with torch.cuda.amp.autocast():
             image_feats, text_feats = self.base_model(images, caption_ids)
 
         i_feats = image_feats[:, 0, :].float()

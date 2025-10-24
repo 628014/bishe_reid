@@ -303,17 +303,18 @@ class Transformer(nn.Module):
         self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads, attn_mask) for _ in range(layers)])
         self.type = type
     def forward(self, x, modal):
-        if self.training:
-            i = 2
-            if modal=='visual':
-                x_fu1 = self.resblocks[:self.layers-i](x)
-                x = self.resblocks[self.layers-i:](x_fu1)
-                return torch.cat([x,x_fu1],dim=1)
-            elif modal == 'text':
-                mix_token = self.resblocks[:self.layers-i](x)
-                mlm_token, ori_token = mix_token.chunk(2,dim=1)
-                x = self.resblocks[self.layers-i:](mlm_token)
-                return torch.cat([x,ori_token],dim=1)
+        # IRRA的时候没有下面的内容 微调的时候不需要train？
+        # if self.training:
+        #     i = 2
+        #     if modal=='visual':
+        #         x_fu1 = self.resblocks[:self.layers-i](x)
+        #         x = self.resblocks[self.layers-i:](x_fu1)
+        #         return torch.cat([x,x_fu1],dim=1)
+        #     elif modal == 'text':
+        #         mix_token = self.resblocks[:self.layers-i](x)
+        #         mlm_token, ori_token = mix_token.chunk(2,dim=1)
+        #         x = self.resblocks[self.layers-i:](mlm_token)
+        #         return torch.cat([x,ori_token],dim=1)
         return self.resblocks(x)
 
 

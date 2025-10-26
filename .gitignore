@@ -10,3 +10,6 @@
 /process/data_pre/__pycache__
 /function/local_test_reid/__pycache__
 /result
+/MLLM4Text-ReID-main/logs/
+__pycache__/
+/output/

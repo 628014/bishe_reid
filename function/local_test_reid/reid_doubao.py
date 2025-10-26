@@ -3,6 +3,9 @@ import re
 import torch
 import numpy as np
 import json
+# 启用OpenCV无头模式，避免Qt显示问题
+os.environ['PYOPENCV_LOG_LEVEL'] = 'FATAL'
+os.environ['DISPLAY'] = ':0'
 from PIL import Image
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
@@ -12,6 +15,7 @@ from utils.checkpoint import Checkpointer
 from utils.iotools import load_train_configs
 from utils.simple_tokenizer import SimpleTokenizer
 import sys
+import textwrap  # 确保导入textwrap
 
 # 添加上级目录到路径
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
@@ -58,40 +62,170 @@ def load_rstpreid_test_data(img_dir, anno_path):
         'pids': test_pids
     }
 
-def show_retrieval_results(query, results, top_k=5, is_query_image=True):
-    plt.figure(figsize=(15, 5))
+def show_retrieval_results(query, results, top_k, is_query_image=True):
+    import textwrap  # 确保导入textwrap
+    plt.figure(figsize=(25, 10))
+    
+    plt.subplots_adjust(
+        left=0.05, 
+        right=0.95, 
+        top=0.85, 
+        bottom=0.15, 
+        wspace=0.2, 
+        hspace=0.1
+    )
     
     if is_query_image:
         try:
             plt.subplot(1, top_k+1, 1)
             img = Image.open(query).resize((128, 256))
             plt.imshow(img)
-            plt.title("Query Image")
+            plt.title("Query Image", fontsize=12, pad=10)
         except (FileNotFoundError, IOError):
-            # 如果无法打开图像，显示为文本
-            plt.subplot(1, top_k+1, 1)
-            plt.text(0.5, 0.5, str(query)[:50] + "..." if len(str(query)) > 50 else str(query), 
-                    ha='center', va='center', wrap=True)
+            ax = plt.subplot(1, top_k+1, 1)
+            plt.text(
+                0.5, 0.45,  # 文本稍向下移
+                str(query)[:50] + "..." if len(str(query)) > 50 else str(query), 
+                ha='center', 
+                va='center', 
+                wrap=True, 
+                fontsize=9,
+                bbox=dict(boxstyle='round,pad=1', fc='white', alpha=0.9, ec='none')
+            )
             plt.axis('off')
-            plt.title("Query")
+            plt.title("Query", fontsize=12, pad=20)  # 增大标题间距
+            # ax.set_aspect(128/256)
     else:
-        plt.subplot(1, top_k+1, 1)
-        plt.text(0.5, 0.5, str(query), ha='center', va='center', wrap=True)
+        ax = plt.subplot(1, top_k+1, 1)
+        wrapped_text = textwrap.fill(str(query), width=15)
+        
+        plt.text(
+            0.5, 0.45,  # 文本稍向下移
+            wrapped_text, 
+            ha='center', 
+            va='center', 
+            wrap=True, 
+            fontsize=9,
+            bbox=dict(boxstyle='round,pad=1', fc='white', alpha=0.9, ec='none')
+        )
         plt.axis('off')
-        plt.title("Query Text")
+        plt.title("Query Text", fontsize=12, pad=20)  # 增大标题与内容的间距（关键）
+        # ax.set_aspect(128/256)
     
     for i, result_path in enumerate(results[:top_k]):
-        plt.subplot(1, top_k+1, i+2)
+        ax = plt.subplot(1, top_k+1, i+2)
         try:
             img = Image.open(result_path).resize((128, 256))
             plt.imshow(img)
-            plt.title(f"Top {i+1}")
+            plt.title(f"Top {i+1}", fontsize=12, pad=10)
+            for spine in ax.spines.values():
+                spine.set_visible(True)
         except (FileNotFoundError, IOError):
-            plt.text(0.5, 0.5, f"无法加载\n图像 {i+1}", ha='center', va='center')
+            plt.text(0.5, 0.5, f"无法加载\n图像 {i+1}", ha='center', va='center', fontsize=10)
         plt.xticks([])
         plt.yticks([])
+        # ax.set_aspect(128/256)
     
-    plt.tight_layout()
+    plt.show()
+
+def show_combined_retrieval_results(query_image, query_text, img_results, text_results, fusion_results, top_k):
+    """
+    Display three types of retrieval results in a single figure with 3 rows:
+    - Row 1: Image-to-image retrieval results
+    - Row 2: Text-to-image retrieval results
+    - Row 3: Image+Text fusion retrieval results
+    """
+    # Create a large figure with sufficient size to accommodate 3 rows
+    plt.figure(figsize=(30, 25))
+    
+    # Set overall layout margins and subplot spacing
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05, wspace=0.2, hspace=0.4)
+    
+    # Row 1: Image-to-image retrieval results
+    # 1. Query image for image-to-image retrieval
+    ax = plt.subplot(3, top_k+1, 1)
+    try:
+        img = Image.open(query_image).resize((128, 256))
+        plt.imshow(img)
+        plt.title("Image Query", fontsize=14, pad=15)
+    except (FileNotFoundError, IOError):
+        plt.text(0.5, 0.45, os.path.basename(query_image), ha='center', va='center', 
+                wrap=True, fontsize=10, bbox=dict(boxstyle='round,pad=1', fc='white', alpha=0.9, ec='none'))
+        plt.axis('off')
+        plt.title("Image Query", fontsize=14, pad=15)
+    plt.xticks([])
+    plt.yticks([])
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+    
+    # 2. Results for image-to-image retrieval
+    for i, result_path in enumerate(img_results[:top_k]):
+        ax = plt.subplot(3, top_k+1, i+2)
+        try:
+            img = Image.open(result_path).resize((128, 256))
+            plt.imshow(img)
+            plt.title(f"Top {i+1}", fontsize=12, pad=10)
+        except (FileNotFoundError, IOError):
+            plt.text(0.5, 0.5, f"Cannot load\nimage {i+1}", ha='center', va='center', fontsize=10)
+        plt.xticks([])
+        plt.yticks([])
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+    
+    # Row 2: Text-to-image retrieval results
+    # 1. Query text for text-to-image retrieval
+    ax = plt.subplot(3, top_k+1, top_k+2)
+    # wrapped_text = textwrap.fill(str(query_text), width=15)
+    wrapped_text = f"Text\n{textwrap.fill(str(query_text)[:150], width=12)}"
+    plt.text(0.5, 0.45, wrapped_text, ha='center', va='center', wrap=True, 
+            fontsize=10, bbox=dict(boxstyle='round,pad=1', fc='white', alpha=0.9, ec='none'))
+    plt.axis('off')
+    # plt.title("Text Query", fontsize=14, pad=15)
+    
+    # 2. Results for text-to-image retrieval
+    for i, result_path in enumerate(text_results[:top_k]):
+        ax = plt.subplot(3, top_k+1, top_k+3+i)
+        try:
+            img = Image.open(result_path).resize((128, 256))
+            plt.imshow(img)
+            plt.title(f"Top {i+1}", fontsize=12, pad=10)
+        except (FileNotFoundError, IOError):
+            plt.text(0.5, 0.5, f"Cannot load\nimage {i+1}", ha='center', va='center', fontsize=10)
+        plt.xticks([])
+        plt.yticks([])
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+    
+    # Row 3: Image+Text fusion retrieval results
+    # 1. Query information for fusion retrieval
+    ax = plt.subplot(3, top_k+1, 2*(top_k+1)+1)
+    combined_query = f"Image+Text\n{textwrap.fill(str(query_text)[:150], width=12)}"
+    plt.text(0.5, 0.45, combined_query, ha='center', va='center', wrap=True, 
+            fontsize=10, bbox=dict(boxstyle='round,pad=1', fc='white', alpha=0.9, ec='none'))
+    plt.axis('off')
+   
+    
+    # 2. Results for fusion retrieval
+    for i, result_path in enumerate(fusion_results[:top_k]):
+        ax = plt.subplot(3, top_k+1, 2*(top_k+1)+2+i)
+        try:
+            img = Image.open(result_path).resize((128, 256))
+            plt.imshow(img)
+            plt.title(f"Top {i+1}", fontsize=12, pad=10)
+        except (FileNotFoundError, IOError):
+            plt.text(0.5, 0.5, f"Cannot load\nimage {i+1}", ha='center', va='center', fontsize=10)
+        plt.xticks([])
+        plt.yticks([])
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+    
+    
+    plt.suptitle("Comparison of Three Retrieval Methods", fontsize=20, y=0.98)
+    
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.96])  # Leave space for suptitle
+    
+   
     plt.show()
 
 class IRRADemo:
@@ -128,6 +262,7 @@ class IRRADemo:
         # 加载权重
         # checkpoint_path = '/home/wangrui/code/MLLM4Text-ReID-main/logs/RSTPReid_1023/20251023_234421_finetune/best2.pth'
         checkpoint_path = '/home/wangrui/code/MLLM4Text-ReID-main/checkpoint/best2.pth'
+        # checkpoint_path = '/home/wangrui/code/MLLM4Text-ReID-main/logs/RSTPReid_1024_new_data/20251024_150416_finetune/best2.pth'
         assert os.path.exists(checkpoint_path), f"模型权重文件不存在: {checkpoint_path}"
         checkpointer = Checkpointer(model)
         checkpointer.load(f=checkpoint_path)
@@ -229,6 +364,7 @@ if __name__ == "__main__":
     config_file = "/home/wangrui/code/MLLM4Text-ReID-main/logs/RSTPReid_1023/20251023_234421_finetune/configs.yaml"
     img_dir = "/home/wangrui/code/MLLM4Text-ReID-main/data/RSTPReid/imgs/"
     anno_path = "/home/wangrui/code/MLLM4Text-ReID-main/data/RSTPReid/data_captions.json"
+    # anno_path = "/home/wangrui/code/MLLM4Text-ReID-main/data/RealReid/random_10_all_5k/data_captions.json"
     
     # 解析命令行参数
     import argparse
@@ -246,6 +382,8 @@ if __name__ == "__main__":
     
     # 示例查询
     if demo.test_dataset['img_paths']:
+        # import pdb
+        # pdb.set_trace()
         # 通过文件名确定sample_img和sample_text
         sample_img = None
         sample_text = "a person in the image"
@@ -260,38 +398,57 @@ if __name__ == "__main__":
                         sample_text = demo.test_dataset['captions'][idx][args.text_idx]
                     break
         print(f"查询图像: {sample_img}, 文本描述: {sample_text}")
+
         # 如果没找到匹配的文件或未提供文件名，则使用默认索引
         if sample_img is None:
             print("未找到指定的图像文件，使用默认样本")
             sample_img = demo.test_dataset['img_paths'][0]
             sample_text = demo.test_dataset['captions'][0][2] if (demo.test_dataset['captions'] and demo.test_dataset['captions'][0]) else "a person in the image"
         
+        top_k = 5
         # 纯图像检索
         print("=== 纯图像检索结果 ===")
-        img_results = demo.image_to_image_retrieval(sample_img, top_k=5)
-        if img_results:
-            show_retrieval_results(sample_img, img_results, is_query_image=True)
+        img_results = demo.image_to_image_retrieval(sample_img, top_k=top_k)
+        # import pdb
+        # pdb.set_trace()
+        print(f"纯图像检索结果: {img_results}")
+        # if img_results:
+        #     show_retrieval_results(sample_img, img_results, top_k,is_query_image=True)
         
         # 纯文本检索
         print(f"=== 纯文本检索结果 (查询: {sample_text}) ===")
-        text_results = demo.text_to_image_retrieval(sample_text, top_k=5)
-        if text_results:
-            show_retrieval_results(sample_text, text_results, is_query_image=False)
+        text_results = demo.text_to_image_retrieval(sample_text, top_k=top_k)
+        # if text_results:
+        #     show_retrieval_results(sample_text, text_results, top_k, is_query_image=False)
+        print(f"纯文本检索结果: {text_results}")
         
         # 融合检索
-            print("=== 图像+文本融合检索结果 ===")
-            fusion_results = demo.image_text_fusion_retrieval(
-                sample_img, sample_text, 
-                img_weight=0.6, 
-                text_weight=0.4, 
-                top_k=5
-            )
-            if fusion_results:
-                # 融合检索显示文本查询，设置is_query_image=False
-                show_retrieval_results(
-                    f"Image + Text\n({sample_text}...)", 
-                    fusion_results, 
-                    is_query_image=False
-                )
+        print("=== 图像+文本融合检索结果 ===")
+        fusion_results = demo.image_text_fusion_retrieval(
+            sample_img, sample_text, 
+            img_weight=0.6, 
+            text_weight=0.4, 
+            top_k=top_k
+        )
+        # if fusion_results:
+        #     # 融合检索显示文本查询，设置is_query_image=False
+        #     show_retrieval_results(
+        #         f"Image + Text\n({sample_text}...)", 
+        #         fusion_results, 
+        #         top_k,
+        #         is_query_image=False
+        #     )
+        print(f"融合检索结果: {fusion_results}")
+        
+        # 使用新的合并展示函数
+        print("=== 合并展示所有检索结果 ===")
+        show_combined_retrieval_results(
+            query_image=sample_img,
+            query_text=sample_text,
+            img_results=img_results,
+            text_results=text_results,
+            fusion_results=fusion_results,
+            top_k=top_k
+        )
     else:
         print("未加载到测试集图像，请检查标注文件中是否有'split: test'的样本")

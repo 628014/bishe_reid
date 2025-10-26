@@ -1,0 +1,41 @@
+# 配置文件 - 跨摄像头行人追踪系统
+
+# YOLO检测模型配置
+detection:
+  model_path: "/home/wangrui/code/ultralytics/yolo11n.pt"
+  conf: 0.25
+  iou: 0.45
+  classes: [0]  # 只检测人
+  device: "cuda"  # "cuda" 或 "cpu"
+
+# ByteTracker追踪器配置
+tracker:
+  type: "bytetrack"
+  track_buffer: 30
+  match_thresh: 0.7
+  new_track_thresh: 0.7
+  track_high_thresh: 0.5
+  track_low_thresh: 0.1
+
+# ReID模型配置
+reid:
+  config_file: "/home/wangrui/code/MLLM4Text-ReID-main/logs/RSTPReid_1023/20251023_234421_finetune/configs.yaml"
+  checkpoint_path: "/home/wangrui/code/MLLM4Text-ReID-main/checkpoint/best2.pth"
+  img_size: 224
+  feature_dim: 512
+  device: "cuda"
+
+# 跨摄像头配置
+cross_camera:
+  similarity_thresh: 0.5  # 跨摄像头ID匹配的相似度阈值
+  use_text_filter: false  # 是否使用文本描述进行过滤
+
+# 输出配置
+output:
+  save_video: false
+  show_video: true
+  save_dir: "/home/wangrui/code/MLLM4Text-ReID-main/output"
+  show: true
+  class_labels: true
+  line_width: 2
+  save_results: true

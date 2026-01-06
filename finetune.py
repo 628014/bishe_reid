@@ -57,9 +57,11 @@ if __name__ == '__main__':
     trainset ,train_loader, val_img_loader0, val_txt_loader0, val_img_loader1, val_txt_loader1, val_img_loader2, val_txt_loader2, num_classes = build_zero_shot_loader(args,finetune=True)
     model = build_finetune_model(args, num_classes)
     logger.info('Total params: %2.fM' % (sum(p.numel() for p in model.parameters()) / 1000000.0))
+    # 构建微调模型
     if args.finetune:
         logger.info("loading {} model".format(args.finetune))
         param_dict = torch.load(args.finetune,map_location='cpu')['model']
+        # 加载预训练权重
         for k in list(param_dict.keys()):
             refine_k = k.replace('module.','')
             param_dict[refine_k] = param_dict[k].detach().clone()
@@ -77,6 +79,7 @@ if __name__ == '__main__':
             # this should be removed if we update BatchNorm stats
             broadcast_buffers=False,
         )
+    
     optimizer = build_optimizer(args, model)
     scheduler = build_lr_scheduler(args, optimizer)
 

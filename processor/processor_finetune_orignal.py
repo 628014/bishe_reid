@@ -56,16 +56,15 @@ def do_train(start_epoch, args, model, train_loader, evaluator0,evaluator1,evalu
         model.train()
 
         for n_iter, batch in enumerate(train_loader):
-            # 将数据移至GPU
             batch = {k: v.cuda() for k, v in batch.items()}
-            # 前向传播，获取损失字典
+           
             ret = model(batch)
-            # 查看这个ret是什么(在bulid_finturn中有说明返回的字典)
-            # 计算平均损失
+            # 查看这个ret是什么
             ret = {key: values.mean() for key, values in ret.items()}
-            # 计算总的损失
             total_loss = sum([v for k, v in ret.items() if "loss" in k])
-            batch_size = batch['images'].shape[0]  
+
+            batch_size = batch['images'].shape[0]
+            
             meters['loss'].update(total_loss.item(), batch_size)
             meters['sdm_loss'].update(ret.get('sdm_loss', 0), batch_size)
             meters['itc_loss'].update(ret.get('itc_loss', 0), batch_size)
@@ -75,11 +74,11 @@ def do_train(start_epoch, args, model, train_loader, evaluator0,evaluator1,evalu
             meters['img_acc'].update(ret.get('img_acc', 0), batch_size)
             meters['txt_acc'].update(ret.get('txt_acc', 0), batch_size)
             meters['mlm_acc'].update(ret.get('mlm_acc', 0), 1)
-            # 反向传播
-            optimizer.zero_grad() # 清空梯度
-            total_loss.backward() #  # 反向传播计算梯度
-            optimizer.step() # 更新模型权重
-            synchronize() # 同步分布式训练
+
+            optimizer.zero_grad()
+            total_loss.backward()
+            optimizer.step()
+            synchronize()
 
             if (n_iter + 1) % log_period == 0:
                 info_str = f"Epoch[{epoch}] Iteration[{n_iter + 1}/{len(train_loader)}]"

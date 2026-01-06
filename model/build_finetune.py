@@ -96,8 +96,9 @@ class IRRA(nn.Module):
         # 之前是这个，因为版本的问题 
         # with torch.autocast(dtype=torch.float16, device_type='cuda'): 
         with torch.cuda.amp.autocast():
+            # 提取特征
             image_feats, text_feats = self.base_model(images, caption_ids)
-
+        # 获取图像和文本的全局特征
         i_feats = image_feats[:, 0, :].float()
         # i_feats = image_feats.float() # for CLIP ResNet visual model
         t_feats = text_feats[torch.arange(text_feats.shape[0]), caption_ids.argmax(dim=-1)].float()

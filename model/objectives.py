@@ -99,6 +99,7 @@ def compute_sdm(image_fetures, text_fetures, pid, logit_scale, image_id=None, fa
     pid = pid.reshape((batch_size, 1)) # make sure pid size is [batch_size, 1]
     
     pid_dist = pid - pid.t()
+    # 相同ID为1，不同为0
     labels = (pid_dist == 0).float()
 
     if image_id != None:
@@ -108,19 +109,19 @@ def compute_sdm(image_fetures, text_fetures, pid, logit_scale, image_id=None, fa
         image_id_mask = (image_id_dist == 0).float()
         labels = (labels - image_id_mask) * factor + image_id_mask
         # labels = (labels + image_id_mask) / 2
-
+    # 归一化特征
     image_norm = image_fetures / image_fetures.norm(dim=1, keepdim=True)
     text_norm = text_fetures / text_fetures.norm(dim=1, keepdim=True)
-
+    # 计算余弦相似度
     t2i_cosine_theta = text_norm @ image_norm.t()
     i2t_cosine_theta = t2i_cosine_theta.t()
-
+    # 缩放相似度
     text_proj_image = logit_scale * t2i_cosine_theta
     image_proj_text = logit_scale * i2t_cosine_theta
-
+     # 归一化真实匹配分布
     # normalize the true matching distribution
     labels_distribute = labels / labels.sum(dim=1)
-
+    # 计算KL散度损失
     i2t_pred = F.softmax(image_proj_text, dim=1)
     i2t_loss = i2t_pred * (F.log_softmax(image_proj_text, dim=1) - torch.log(labels_distribute + epsilon))
     t2i_pred = F.softmax(text_proj_image, dim=1)
@@ -132,6 +133,13 @@ def compute_sdm(image_fetures, text_fetures, pid, logit_scale, image_id=None, fa
 
 
 def compute_mlm(scores, labels):
+    """
+    对齐机制 ：
+    - 随机掩码文本中的部分token
+    - 利用图像特征辅助预测掩码位置的token
+    - 通过交叉熵损失监督预测结果
+    - 强制模型学习图像和文本之间的语义关联
+    """
     ce = nn.CrossEntropyLoss(ignore_index=0)
     return ce(scores, labels)
 

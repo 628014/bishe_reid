@@ -140,7 +140,7 @@ class LuPerson_PEDES(BaseDataset):
                         cap = random.choice(safe_dict[path2cap])
                     except:
                         pass
-                part2sim = 77 * [1- 0.15]
+                part2sim = 77 * [1- 0.15] # 创建长度为77的列表，每个元素值为0.85， 所有样本使用相同的初始 part2sim 值
                 part2sim = np.array(part2sim)
                 dataset.append([pid,idx_count,img_path, cap, part2sim])
                 num_caption += 1

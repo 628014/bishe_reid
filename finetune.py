@@ -85,6 +85,7 @@ if __name__ == '__main__':
 
     is_master = get_rank() == 0
     checkpointer = Checkpointer(model, optimizer, scheduler, args.output_dir, is_master)
+    # 3个数据集上做评估
     evaluator0 = Evaluator(val_img_loader0, val_txt_loader0)
     evaluator1 = Evaluator(val_img_loader1, val_txt_loader1)
     evaluator2 = Evaluator(val_img_loader2, val_txt_loader2)

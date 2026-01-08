@@ -65,7 +65,7 @@ def do_train(start_epoch, args, model, train_loader, evaluator0,evaluator1,evalu
             ret = {key: values.mean() for key, values in ret.items()}
             # 计算总的损失
             total_loss = sum([v for k, v in ret.items() if "loss" in k])
-            batch_size = batch['images'].shape[0]  
+            batch_size = batch['images'].shape[0]
             meters['loss'].update(total_loss.item(), batch_size)
             meters['sdm_loss'].update(ret.get('sdm_loss', 0), batch_size)
             meters['itc_loss'].update(ret.get('itc_loss', 0), batch_size)
@@ -105,6 +105,7 @@ def do_train(start_epoch, args, model, train_loader, evaluator0,evaluator1,evalu
                 "Epoch {} done. Time per batch: {:.3f}[min] Speed: {:.1f}[samples/s]"
                 .format(epoch, time_per_batch,
                         train_loader.batch_size / time_per_batch))
+        # 当满足对应的评估周期的时候评估一次，评估3个数据集上的效果，并且保存最好的模型，
         if epoch % eval_period == 0:
             logger.info(f"best R1: CUHK {best_top1_0}, ICFG {best_top1_1}, RSTP {best_top1_2}")
             if get_rank() == 0:

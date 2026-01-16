@@ -324,6 +324,14 @@ class IRRADemo:
             
             similarity = torch.mm(text_feat, self.test_image_features.t()).squeeze()
             _, indices = torch.topk(similarity, k=top_k)
+
+            print(f"text_feat 维度: {text_feat.shape}")  # 推荐方式，更直观
+            # 或者使用 size() 方法
+            # print(f"text_feat 维度: {text_feat.size()}")
+            
+            # 也可以分别输出各个维度的具体值，方便调试
+            print(f"batch维度: {text_feat.shape[0]}, 特征维度: {text_feat.shape[1]}")
+
             
             return [self.test_dataset['img_paths'][i] for i in indices]
         except Exception as e:

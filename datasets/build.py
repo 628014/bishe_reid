@@ -169,12 +169,14 @@ def build_dataloader(args, tranforms=None):
                                                is_train=False)
 
         ds = dataset.test
+        # 单独加载图像，经过ImageDataset后已经是张量了
         test_img_set = ImageDataset(ds['image_pids'], ds['img_paths'],
                                     test_transforms)
+        # 单独加载文本，经过TextDataset后已经是tokenizer后的结果了
         test_txt_set = TextDataset(ds['caption_pids'],
                                    ds['captions'],
                                    text_length=args.text_length)
-
+        
         test_img_loader = DataLoader(test_img_set,
                                      batch_size=args.test_batch_size,
                                      shuffle=False,
@@ -264,6 +266,7 @@ def build_zero_shot_loader(args, finetune=False):
                                 )
 
     return syn_dataset.train, train_loader, val_img_loader0, val_txt_loader0, val_img_loader1, val_txt_loader1, val_img_loader2, val_txt_loader2, num_classes
+
 def build_zero_shot_loader_match_score(args, finetune=False):
     logger = logging.getLogger("IRRA.dataset")
 

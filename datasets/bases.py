@@ -133,6 +133,22 @@ class TextDataset(Dataset):
 
         return pid, caption
 
+
+class RawTextDataset(Dataset):
+    """Return raw caption strings (no tokenization). Used for models that handle their own tokenization (e.g. Qwen processors)."""
+    def __init__(self,
+                 caption_pids,
+                 captions):
+        self.caption_pids = caption_pids
+        self.captions = captions
+
+    def __len__(self):
+        return len(self.caption_pids)
+
+    def __getitem__(self, index):
+        pid, caption = self.caption_pids[index], self.captions[index]
+        return pid, caption
+
 def softmax(x):
         """Compute softmax values for each sets of scores in x."""
         e_x = np.exp(x - np.max(x))
@@ -157,8 +173,18 @@ class ImageTextMLMDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        pid, image_id, img_path, caption, sim = self.dataset[index]
+        # pid, image_id, img_path, caption, sim = self.dataset[index]
+        # 兼容 有sim和无sim两种情况 2026.1.26 wangrui 
+        data = self.dataset[index]
+        if len(data) == 5:
+            pid, image_id, img_path, caption, sim = data
+        else:
+            # 如果只有4个元素，说明是Finetune阶段的强监督数据
+            # 默认为正样本，sim 设置为 1.0 (代表完全匹配)
+            pid, image_id, img_path, caption = data
+            sim = 1.0
         img = read_image(img_path)
+        
         if self.transform is not None:
             img = self.transform(img)
 

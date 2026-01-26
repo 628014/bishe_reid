@@ -62,7 +62,8 @@ class RSTPReid(BaseDataset):
                 img_path = op.join(self.img_dir, anno['img_path'])
                 captions = anno['captions'] # caption list
                 for caption in captions:
-                    dataset.append((pid, image_id, img_path, caption, 0.0))
+                    # dataset.append((pid, image_id, img_path, caption, 0.0))
+                    dataset.append((pid, image_id, img_path, caption))
                 image_id += 1
             for idx, pid in enumerate(pid_container):
                 # check pid begin from 0 and no break
@@ -80,7 +81,8 @@ class RSTPReid(BaseDataset):
                 img_path = op.join(self.img_dir, anno['img_path'])
                 img_paths.append(img_path)
                 image_pids.append(pid)
-                caption_list = anno['captions'] # caption list
+                caption_list = anno['captions']  # caption list
+                # 2026.1.6 这里测试的时候caption是合并在一起的
                 for caption in caption_list:
                     captions.append(caption)
                     caption_pids.append(pid)

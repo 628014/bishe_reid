@@ -5,26 +5,19 @@ from utils.iotools import read_json
 from .bases import BaseDataset
 
 
-class RSTPReid(BaseDataset):
+class RSTPReid_match(BaseDataset):
     """
-    RSTPReid
-
-    Reference:
-    DSSL: Deep Surroundings-person Separation Learning for Text-based Person Retrieval MM 21
-
-    URL: http://arxiv.org/abs/2109.05534
-
-    Dataset statistics:
-    # identities: 4101 
+    RSTPReid with match_score
     """
     dataset_dir = 'RSTPReid'
 
     def __init__(self, root='', verbose=True):
-        super(RSTPReid, self).__init__()
+        super(RSTPReid_match, self).__init__()
         self.dataset_dir = op.join(root, self.dataset_dir)
         self.img_dir = op.join(self.dataset_dir, 'imgs/')
 
-        self.anno_path = op.join(self.dataset_dir, 'data_captions.json')
+        # 使用带有match_score的json文件
+        self.anno_path = op.join(self.dataset_dir, 'data_caption_all_qwen.json')
         self._check_before_run()
 
         self.train_annos, self.test_annos, self.val_annos = self._split_anno(self.anno_path)
@@ -60,9 +53,16 @@ class RSTPReid(BaseDataset):
                 pid = int(anno['id'])
                 pid_container.add(pid)
                 img_path = op.join(self.img_dir, anno['img_path'])
-                captions = anno['captions'] # caption list
-                for caption in captions:
-                    dataset.append((pid, image_id, img_path, caption))
+                captions = anno['captions']  # caption list
+                match_scores = anno.get('match_score', ['0.0'] * len(captions))  # 获取匹配分数
+                # 遍历每个caption和对应的match_score
+                for caption, match_score in zip(captions, match_scores):
+                    # 将match_score转换为float类型
+                    try:
+                        match_score_float = float(match_score)
+                    except:
+                        match_score_float = 0.0
+                    dataset.append((pid, image_id, img_path, caption, match_score_float))
                 image_id += 1
             for idx, pid in enumerate(pid_container):
                 # check pid begin from 0 and no break
@@ -80,7 +80,8 @@ class RSTPReid(BaseDataset):
                 img_path = op.join(self.img_dir, anno['img_path'])
                 img_paths.append(img_path)
                 image_pids.append(pid)
-                caption_list = anno['captions'] # caption list
+                caption_list = anno['captions']  # caption list
+                # 2026.1.6 这里测试的时候caption是合并在一起的
                 for caption in caption_list:
                     captions.append(caption)
                     caption_pids.append(pid)

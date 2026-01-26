@@ -1,5 +1,5 @@
 #!/bin/bash
-DATASET_NAME="RSTPReid"
+DATASET_NAME="CUHK-PEDES"
 
 CUDA_VISIBLE_DEVICES=0 \
 python finetune.py \
@@ -12,5 +12,3 @@ python finetune.py \
 --num_epoch 60 \
 --root_dir /home/wangrui/code/MLLM4Text-ReID-main/data \
 --finetune /home/wangrui/code/MLLM4Text-ReID-main/checkpoint/best2.pth
-# --finetune /home/wangrui/code/MLLM4Text-ReID-main/checkpoint/best2.pth
-

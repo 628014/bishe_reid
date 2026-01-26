@@ -5,13 +5,6 @@ import os
 import torch.nn.functional as F
 import logging
 
-"""
-先提取文本特征（query，查询端）和图像特征（gallery，图库端）；
-计算文本 - 图像的相似度矩阵；
-基于相似度排序，计算检索任务的「排序类指标」（R1/R5/R10）和「召回质量指标」（mAP/mINP）；
-支持双向检索：文本搜图像（T2I）、图像搜文本（I2T，需开启 i2t_metric=True）。
-"""
-
 
 def rank(similarity, q_pids, g_pids, max_rank=10, get_mAP=True):
     if get_mAP:

@@ -5,26 +5,27 @@ from utils.iotools import read_json
 from .bases import BaseDataset
 
 
-class RSTPReid(BaseDataset):
+class ICFGPEDES(BaseDataset):
     """
-    RSTPReid
+    ICFG-PEDES
 
     Reference:
-    DSSL: Deep Surroundings-person Separation Learning for Text-based Person Retrieval MM 21
+    Semantically Self-Aligned Network for Text-to-Image Part-aware Person Re-identification arXiv 2107
 
-    URL: http://arxiv.org/abs/2109.05534
+    URL: http://arxiv.org/abs/2107.12666
 
     Dataset statistics:
-    # identities: 4101 
+    # identities: 4102
+    # images: 34674 (train) + 4855 (query) + 14993 (gallery)
+    # cameras: 15
     """
-    dataset_dir = 'RSTPReid'
+    dataset_dir = 'ICFG-PEDES'
 
     def __init__(self, root='', verbose=True):
-        super(RSTPReid, self).__init__()
+        super(ICFGPEDES, self).__init__()
         self.dataset_dir = op.join(root, self.dataset_dir)
         self.img_dir = op.join(self.dataset_dir, 'imgs/')
-
-        self.anno_path = op.join(self.dataset_dir, 'data_captions.json')
+        self.anno_path = op.join(self.dataset_dir, 'ICFG-PEDES.json')
         self._check_before_run()
 
         self.train_annos, self.test_annos, self.val_annos = self._split_anno(self.anno_path)
@@ -34,7 +35,7 @@ class RSTPReid(BaseDataset):
         self.val, self.val_id_container = self._process_anno(self.val_annos)
 
         if verbose:
-            self.logger.info("=> RSTPReid Images and Captions are loaded")
+            self.logger.info("=> ICFG-PEDES Images and Captions are loaded")
             self.show_dataset_info()
 
 
@@ -59,11 +60,13 @@ class RSTPReid(BaseDataset):
             for anno in annos:
                 pid = int(anno['id'])
                 pid_container.add(pid)
-                img_path = op.join(self.img_dir, anno['img_path'])
+                img_path = op.join(self.img_dir, anno['file_path'])
                 captions = anno['captions'] # caption list
                 for caption in captions:
                     dataset.append((pid, image_id, img_path, caption))
+                    
                 image_id += 1
+
             for idx, pid in enumerate(pid_container):
                 # check pid begin from 0 and no break
                 assert idx == pid, f"idx: {idx} and pid: {pid} are not match"
@@ -77,7 +80,7 @@ class RSTPReid(BaseDataset):
             for anno in annos:
                 pid = int(anno['id'])
                 pid_container.add(pid)
-                img_path = op.join(self.img_dir, anno['img_path'])
+                img_path = op.join(self.img_dir, anno['file_path'])
                 img_paths.append(img_path)
                 image_pids.append(pid)
                 caption_list = anno['captions'] # caption list
@@ -101,3 +104,10 @@ class RSTPReid(BaseDataset):
             raise RuntimeError("'{}' is not available".format(self.img_dir))
         if not op.exists(self.anno_path):
             raise RuntimeError("'{}' is not available".format(self.anno_path))
+import re
+
+def remove_punctuation_and_spaces(text):
+    # 使用正则表达式去掉标点符号和空格
+    cleaned_text = re.sub(r'[^\w\s]', ' ', text)
+    # cleaned_text = re.sub(r'\s+', '', cleaned_text)
+    return cleaned_text

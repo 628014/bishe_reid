@@ -8,9 +8,9 @@ import random
 import time
 import torch.nn as nn
 
-# 修改引用：引入新的loader函数
-from datasets.build_match import build_zero_shot_loader_match_score_and_dynamic_masking
-from processor.processor_finetune_match import do_train_match
+from datasets.build_match import build_zero_shot_loader
+from datasets.bases import ImageTextMLMDataset
+from processor.processor_finetune_match import do_train, ImageTextMLMDatasetMatch
 from utils.checkpoint import Checkpointer
 from utils.iotools import save_train_configs
 from utils.logger import setup_logger
@@ -52,32 +52,22 @@ if __name__ == '__main__':
     save_train_configs(args.output_dir, args)
 
     # get image-text pair datasets dataloader
-    # 使用新的函数，直接解包9个返回值
-    trainset, train_loader, val_img_loader0, val_txt_loader0, val_img_loader1, val_txt_loader1, val_img_loader2, val_txt_loader2, num_classes = build_zero_shot_loader_match_score_and_dynamic_masking(args, finetune=True)
-    
-    # 构建模型
+    # 使用新的build_zero_shot_loader，加载带有match_score的数据
+    trainset, train_loader, val_img_loader0, val_txt_loader0, val_img_loader1, val_txt_loader1, val_img_loader2, val_txt_loader2, num_classes = build_zero_shot_loader(args, finetune=True)
     model = build_finetune_model(args, num_classes)
     logger.info('Total params: %2.fM' % (sum(p.numel() for p in model.parameters()) / 1000000.0))
-    
-    # 构建微调模型
     if args.finetune:
         logger.info("loading {} model".format(args.finetune))
-        # 兼容性处理
-        chkpt = torch.load(args.finetune, map_location='cpu')
-        param_dict = chkpt['model'] if 'model' in chkpt else chkpt
-        
-        # 加载预训练权重
+        param_dict = torch.load(args.finetune, map_location='cpu')['model']
         for k in list(param_dict.keys()):
             refine_k = k.replace('module.', '')
             param_dict[refine_k] = param_dict[k].detach().clone()
             del param_dict[k]
-            
-        # strict=False 允许加载时忽略新增的 match_regressor
-        msg = model.load_state_dict(param_dict, strict=False)
-        logger.info(f"Load State Dict Message: {msg}")
-        
+        model.load_state_dict(param_dict, False)
+    # model = model.float()
     model.cuda()
-    
+    model = nn.DataParallel(model)
+
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
             model,
@@ -86,14 +76,11 @@ if __name__ == '__main__':
             # this should be removed if we update BatchNorm stats
             broadcast_buffers=False,
         )
-    
     optimizer = build_optimizer(args, model)
     scheduler = build_lr_scheduler(args, optimizer)
 
     is_master = get_rank() == 0
     checkpointer = Checkpointer(model, optimizer, scheduler, args.output_dir, is_master)
-    
-    # 3个数据集上做评估
     evaluator0 = Evaluator(val_img_loader0, val_txt_loader0)
     evaluator1 = Evaluator(val_img_loader1, val_txt_loader1)
     evaluator2 = Evaluator(val_img_loader2, val_txt_loader2)
@@ -103,5 +90,6 @@ if __name__ == '__main__':
         checkpoint = checkpointer.resume(args.resume_ckpt_file)
         start_epoch = checkpoint['epoch']
 
-    # 调用训练函数
-    do_train_match(start_epoch, args, model, train_loader, evaluator0, evaluator1, evaluator2, optimizer, scheduler, checkpointer, trainset)
+    
+    # 使用新的do_train函数，支持match_loss
+    do_train(start_epoch, args, model, train_loader, evaluator0, evaluator1, evaluator2, optimizer, scheduler, checkpointer, trainset)

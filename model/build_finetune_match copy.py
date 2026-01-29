@@ -1,9 +1,11 @@
 from model import objectives_match as objectives
-from .clip_model import build_CLIP_from_openai_pretrained, convert_weights, Transformer, LayerNorm, QuickGELU
+from .clip_model import ResidualAttentionBlock, ResidualCrossAttentionBlock, Transformer, QuickGELU, LayerNorm, build_CLIP_from_openai_pretrained, convert_weights
+import numpy as np
 import torch
 import torch.nn as nn
 from collections import OrderedDict
 import torch.nn.functional as F
+
 
 class IRRA(nn.Module):
     def __init__(self, args, num_classes=11003):
@@ -16,64 +18,57 @@ class IRRA(nn.Module):
         self.embed_dim = base_cfg['embed_dim']
         self.logit_scale = torch.ones([]) * (1 / args.temperature) 
 
-        # --- 新增：Match Score 回归头 ---
-        if 'match' in self.current_task:
-            # 输入是 Image_Feat + Text_Feat (拼接)
+        # 添加回归头用于预测匹配分数
+        if 'match' in args.loss_names:
             self.match_regressor = nn.Sequential(
                 nn.Linear(self.embed_dim * 2, self.embed_dim),
-                nn.LayerNorm(self.embed_dim),
                 nn.GELU(),
-                nn.Dropout(0.1),
-                nn.Linear(self.embed_dim, 1),
-                nn.Sigmoid() # 限制输出在 0-1 之间
+                nn.Linear(self.embed_dim, 1)
             )
-            # 初始化
-            for m in self.match_regressor.modules():
-                if isinstance(m, nn.Linear):
-                    nn.init.normal_(m.weight.data, std=0.02)
-                    if m.bias is not None:
-                        nn.init.constant_(m.bias.data, 0.0)
+            # 初始化回归头
+            for layer in self.match_regressor:
+                if isinstance(layer, nn.Linear):
+                    nn.init.normal_(layer.weight.data, std=0.02)
+                    nn.init.constant_(layer.bias.data, val=0.0)
 
-        # ID Loss Head
-        if 'id' in self.current_task:
+        if 'id' in args.loss_names:
             self.classifier = nn.Linear(self.embed_dim, self.num_classes)
             nn.init.normal_(self.classifier.weight.data, std=0.001)
             nn.init.constant_(self.classifier.bias.data, val=0.0)
 
-        # MLM Loss Head
-        if 'mlm' in self.current_task:
+        if 'mlm' in args.loss_names:
             self.cross_attn = nn.MultiheadAttention(self.embed_dim,
                                                     self.embed_dim // 64,
                                                     batch_first=True)
             self.cross_modal_transformer = Transformer(width=self.embed_dim,
                                                        layers=args.cmt_depth,
-                                                       heads=self.embed_dim // 64)
+                                                       heads=self.embed_dim //
+                                                       64)
             scale = self.cross_modal_transformer.width**-0.5
             
             self.ln_pre_t = LayerNorm(self.embed_dim)
             self.ln_pre_i = LayerNorm(self.embed_dim)
             self.ln_post = LayerNorm(self.embed_dim)
 
-            # Init Parameters
             proj_std = scale * ((2 * self.cross_modal_transformer.layers)**-0.5)
             attn_std = scale
             fc_std = (2 * self.cross_modal_transformer.width)**-0.5
-            
-            nn.init.normal_(self.cross_attn.in_proj_weight, std=attn_std)
-            nn.init.normal_(self.cross_attn.out_proj.weight, std=proj_std)
-
             for block in self.cross_modal_transformer.resblocks:
                 nn.init.normal_(block.attn.in_proj_weight, std=attn_std)
                 nn.init.normal_(block.attn.out_proj.weight, std=proj_std)
                 nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
                 nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
 
+            # init cross attn
+            nn.init.normal_(self.cross_attn.in_proj_weight, std=attn_std)
+            nn.init.normal_(self.cross_attn.out_proj.weight, std=proj_std)
+
             self.mlm_head = nn.Sequential(
                 OrderedDict([('dense', nn.Linear(self.embed_dim, self.embed_dim)),
                             ('gelu', QuickGELU()),
                             ('ln', LayerNorm(self.embed_dim)),
                             ('fc', nn.Linear(self.embed_dim, args.vocab_size))]))
-            
+            # init mlm head
             nn.init.normal_(self.mlm_head.dense.weight, std=fc_std)
             nn.init.normal_(self.mlm_head.fc.weight, std=proj_std)
 
@@ -82,6 +77,7 @@ class IRRA(nn.Module):
         self.current_task = [l.strip() for l in loss_names.split('+')]
         print(f'Training Model with {self.current_task} tasks')
     
+    
     def cross_former(self, q, k, v):
         x = self.cross_attn(
                 self.ln_pre_t(q),
@@ -89,104 +85,115 @@ class IRRA(nn.Module):
                 self.ln_pre_i(v),
                 need_weights=False)[0]
         x = x.permute(1, 0, 2)  # NLD -> LND
+        # x = self.cross_modal_transformer(x) 原始是这样的 2025.10.23 报错没有model的问题解决 
         x = self.cross_modal_transformer(x, modal='text')
         x = x.permute(1, 0, 2)  # LND -> NLD
+
         x = self.ln_post(x)
         return x
 
-    # --- 补全推理方法 (Evaluator必须) ---
     def encode_image(self, image):
-        # 提取图像特征，取CLS token
         image_feats = self.base_model.encode_image(image)
         return image_feats[:, 0, :].float()
 
     def encode_text(self, text):
-        # 提取文本特征，取EOT token
         x = self.base_model.encode_text(text)
         return x[torch.arange(x.shape[0]), text.argmax(dim=-1)].float()
-    # -----------------------------------
 
     def forward(self, batch):
         ret = dict()
 
         images = batch['images']
         caption_ids = batch['caption_ids']
-        
-        # 使用 AMP 自动混合精度
-        image_feats, text_feats = self.base_model(images, caption_ids)
+        # 之前是这个，因为版本的问题 
+        # with torch.autocast(dtype=torch.float16, device_type='cuda'): 
+        with torch.cuda.amp.autocast():
+            image_feats, text_feats = self.base_model(images, caption_ids)
 
         i_feats = image_feats[:, 0, :].float()
+        # i_feats = image_feats.float() # for CLIP ResNet visual model
         t_feats = text_feats[torch.arange(text_feats.shape[0]), caption_ids.argmax(dim=-1)].float()
 
         logit_scale = self.logit_scale
 
-        # --- 1. ITC Loss ---
         if 'itc' in self.current_task:
-            ret.update({'itc_loss': objectives.compute_itc(i_feats, t_feats, logit_scale)})
+            ret.update({'itc_loss':objectives.compute_itc(i_feats, t_feats, logit_scale)})
         
-        # --- 2. SDM Loss ---
         if 'sdm' in self.current_task:
-            ret.update({'sdm_loss': objectives.compute_sdm(i_feats, t_feats, batch['pids'], logit_scale)})
+            ret.update({'sdm_loss':objectives.compute_sdm(i_feats, t_feats, batch['pids'], logit_scale)})
 
-        # --- 3. CMPM Loss ---
         if 'cmpm' in self.current_task:
-            ret.update({'cmpm_loss': objectives.compute_cmpm(i_feats, t_feats, batch['pids'])})
+            ret.update({'cmpm_loss':objectives.compute_cmpm(i_feats, t_feats, batch['pids'])})
         
-        # --- 4. ID Loss ---
         if 'id' in self.current_task:
-            # 注意：移除 .half()，交由 autocast 控制
-            image_logits = self.classifier(i_feats).float()
-            text_logits = self.classifier(t_feats).float()
-            
-            ret.update({'id_loss': objectives.compute_id(image_logits, text_logits, batch['pids']) * self.args.id_loss_weight})
+            image_logits = self.classifier(i_feats.half()).float()
+            text_logits = self.classifier(t_feats.half()).float()
+            ret.update({'id_loss':objectives.compute_id(image_logits, text_logits, batch['pids'])*self.args.id_loss_weight})
 
             image_pred = torch.argmax(image_logits, dim=1)
             text_pred = torch.argmax(text_logits, dim=1)
-            ret.update({'img_acc': (image_pred == batch['pids']).float().mean()})
-            ret.update({'txt_acc': (text_pred == batch['pids']).float().mean()})
+
+            image_precision = (image_pred == batch['pids']).float().mean()
+            text_precision = (text_pred == batch['pids']).float().mean()
+            ret.update({'img_acc': image_precision})
+            ret.update({'txt_acc': text_precision})
         
-        # --- 5. MLM Loss ---
         if 'mlm' in self.current_task:
             mlm_ids = batch['mlm_ids']
+
             mlm_feats = self.base_model.encode_text(mlm_ids)
-            
-            # Cross Attention
+
             x = self.cross_former(mlm_feats, image_feats, image_feats)
-            x = self.mlm_head(x)  # [batch_size, text_len, vocab_size]
+
+            x = self.mlm_head(x)  # [batch_size, text_len, num_colors]
 
             scores = x.float().reshape(-1, self.args.vocab_size)
             mlm_labels = batch['mlm_labels'].reshape(-1)
-            
-            ret.update({'mlm_loss': objectives.compute_mlm(scores, mlm_labels) * self.args.mlm_loss_weight})
+            ret.update({'mlm_loss': objectives.compute_mlm(scores, mlm_labels)*self.args.mlm_loss_weight})
 
             pred = scores.max(1)[1]
             mlm_label_idx = torch.nonzero(mlm_labels)
-            if len(mlm_label_idx) > 0:
-                acc = (pred[mlm_label_idx] == mlm_labels[mlm_label_idx]).float().mean()
-                ret.update({'mlm_acc': acc})
-            else:
-                ret.update({'mlm_acc': torch.tensor(0.0).cuda()})
+            acc = (pred[mlm_label_idx] == mlm_labels[mlm_label_idx]).float().mean()
+            ret.update({'mlm_acc': acc})
 
-        # --- 6. Match Score Regression Loss (新增) ---
+        if 'att_mlm' in self.current_task:
+            for att_type in ['shoes','hairstyle','genders','top','trousers','belongings']:
+                mlm_ids = batch[att_type+'_mlm_ids']
+
+                mlm_feats = self.base_model.encode_text(mlm_ids)
+
+                x = self.cross_former(mlm_feats, image_feats, image_feats)
+
+                x = self.mlm_head(x)  # [batch_size, text_len, num_colors]
+
+                scores = x.float().reshape(-1, self.args.vocab_size)
+                mlm_labels = batch[att_type+'_mlm_labels'].reshape(-1)
+                ret.update({att_type+'_loss': objectives.compute_mlm(scores, mlm_labels)*self.args.mlm_loss_weight})
+
+                pred = scores.max(1)[1]
+                mlm_label_idx = torch.nonzero(mlm_labels)
+                acc = (pred[mlm_label_idx] == mlm_labels[mlm_label_idx]).float().mean()
+                ret.update({att_type+'_acc': acc})
+
+        # 计算匹配分数回归损失
         if 'match' in self.current_task:
-            # 特征拼接
-            combined_feats = torch.cat([i_feats, t_feats], dim=1) # [B, 2*D]
-            
-            # 回归预测
-            predicted_scores = self.match_regressor(combined_feats).squeeze(1) # [B]
-            
-            target_scores = batch['match_score'].to(i_feats.device).float()
-            
-            # MSE Loss
-            match_loss = F.mse_loss(predicted_scores, target_scores)
-            ret.update({'match_loss': match_loss})
+            # 拼接图像和文本特征
+            combined_feats = torch.cat([i_feats, t_feats], dim=1)
+            # 退出autocast上下文计算回归损失，避免类型不匹配
+            with torch.cuda.amp.autocast(enabled=False):
+                # 预测匹配分数
+                predicted_match = self.match_regressor(combined_feats).squeeze(1)
+                # 计算MSE损失
+                match_loss = F.mse_loss(predicted_match, batch['match_score'].float())
+                ret.update({'match_loss': match_loss})
+                # 记录预测结果用于监控
+                ret.update({'match_pred': predicted_match})
 
         return ret
 
+
 def build_finetune_model(args, num_classes=11003):
     model = IRRA(args, num_classes)
-    # 注意：这里我们移除了 convert_weights(model) 以保持 FP32 权重，
-    # 这样可以兼容 torch.cuda.amp.GradScaler，避免 "Attempting to unscale FP16 gradients" 错误。
-    # 混合精度计算会在 forward 中的 autocast 上下文中自动进行。
-    model.float() 
+    # covert model to fp16
+    convert_weights(model)
     return model

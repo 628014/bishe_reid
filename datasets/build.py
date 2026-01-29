@@ -316,86 +316,87 @@ def build_zero_shot_loader(args, finetune=False):
 
     return syn_dataset.train, train_loader, val_img_loader0, val_txt_loader0, val_img_loader1, val_txt_loader1, val_img_loader2, val_txt_loader2, num_classes
 
-def build_zero_shot_loader_match_score(args, finetune=False):
-    logger = logging.getLogger("IRRA.dataset")
+# def build_zero_shot_loader_match_score(args, finetune=False):
+#     logger = logging.getLogger("IRRA.dataset")
 
-    num_workers = args.num_workers
-    dataset0 = __factory['CUHK-PEDES'](root=args.root_dir)
-    dataset1 = __factory['ICFG-PEDES'](root=args.root_dir)
-    dataset2 = __factory['RSTPReid'](root=args.root_dir)
+#     num_workers = args.num_workers
+#     dataset0 = __factory['CUHK-PEDES'](root=args.root_dir)
+#     dataset1 = __factory['ICFG-PEDES'](root=args.root_dir)
+#     dataset2 = __factory['RSTPReid'](root=args.root_dir)
 
-    train_transforms = build_transforms(img_size=args.img_size,
-                                            aug=args.img_aug,
-                                            is_train=True)
-    val_transforms = build_transforms(img_size=args.img_size,
-                                          is_train=False)
+#     train_transforms = build_transforms(img_size=args.img_size,
+#                                             aug=args.img_aug,
+#                                             is_train=True)
+#     val_transforms = build_transforms(img_size=args.img_size,
+#                                           is_train=False)
     
-    ds = dataset0.test
-    val_img_set = ImageDataset(ds['image_pids'], ds['img_paths'],
-                                val_transforms)
-    val_txt_set = TextDataset(ds['caption_pids'],
-                                ds['captions'],
-                                text_length=args.text_length)
-    val_img_loader0 = DataLoader(val_img_set,
-                                batch_size=args.batch_size,
-                                shuffle=False,
-                                num_workers=num_workers)
-    val_txt_loader0 = DataLoader(val_txt_set,
-                                batch_size=args.batch_size,
-                                shuffle=False,
-                                num_workers=num_workers)
+#     ds = dataset0.test
+#     val_img_set = ImageDataset(ds['image_pids'], ds['img_paths'],
+#                                 val_transforms)
+#     val_txt_set = TextDataset(ds['caption_pids'],
+#                                 ds['captions'],
+#                                 text_length=args.text_length)
+#     val_img_loader0 = DataLoader(val_img_set,
+#                                 batch_size=args.batch_size,
+#                                 shuffle=False,
+#                                 num_workers=num_workers)
+#     val_txt_loader0 = DataLoader(val_txt_set,
+#                                 batch_size=args.batch_size,
+#                                 shuffle=False,
+#                                 num_workers=num_workers)
     
-    ds = dataset1.test
-    val_img_set = ImageDataset(ds['image_pids'], ds['img_paths'],
-                                val_transforms)
-    val_txt_set = TextDataset(ds['caption_pids'],
-                                ds['captions'],
-                                text_length=args.text_length)
-    val_img_loader1 = DataLoader(val_img_set,
-                                batch_size=args.batch_size,
-                                shuffle=False,
-                                num_workers=num_workers)
-    val_txt_loader1 = DataLoader(val_txt_set,
-                                batch_size=args.batch_size,
-                                shuffle=False,
-                                num_workers=num_workers)
+#     ds = dataset1.test
+#     val_img_set = ImageDataset(ds['image_pids'], ds['img_paths'],
+#                                 val_transforms)
+#     val_txt_set = TextDataset(ds['caption_pids'],
+#                                 ds['captions'],
+#                                 text_length=args.text_length)
+#     val_img_loader1 = DataLoader(val_img_set,
+#                                 batch_size=args.batch_size,
+#                                 shuffle=False,
+#                                 num_workers=num_workers)
+#     val_txt_loader1 = DataLoader(val_txt_set,
+#                                 batch_size=args.batch_size,
+#                                 shuffle=False,
+#                                 num_workers=num_workers)
     
-    ds = dataset2.test
-    val_img_set = ImageDataset(ds['image_pids'], ds['img_paths'],
-                                val_transforms)
-    val_txt_set = TextDataset(ds['caption_pids'],
-                                ds['captions'],
-                                text_length=args.text_length)
-    val_img_loader2 = DataLoader(val_img_set,
-                                batch_size=args.batch_size,
-                                shuffle=False,
-                                num_workers=num_workers)
-    val_txt_loader2 = DataLoader(val_txt_set,
-                                batch_size=args.batch_size,
-                                shuffle=False,
-                                num_workers=num_workers)
-    if finetune:
-        syn_dataset = __factory[args.dataset_name](root=args.root_dir)
-    else:
-        syn_dataset = __factory[args.pretrain](root=args.root_dir)
-    # 微调的时候用的15%掩码的常规版本  
-    train_set = DynamicMaskingDataset(
-        syn_dataset.train,
-        train_transforms,
-        text_length=args.text_length,
-        p=0.15,  # 基础遮蔽概率
-        alpha=0.5  # 抑制因子系数
-    )
-    num_classes = len(syn_dataset.train)
+#     ds = dataset2.test
+#     val_img_set = ImageDataset(ds['image_pids'], ds['img_paths'],
+#                                 val_transforms)
+#     val_txt_set = TextDataset(ds['caption_pids'],
+#                                 ds['captions'],
+#                                 text_length=args.text_length)
+#     val_img_loader2 = DataLoader(val_img_set,
+#                                 batch_size=args.batch_size,
+#                                 shuffle=False,
+#                                 num_workers=num_workers)
+#     val_txt_loader2 = DataLoader(val_txt_set,
+#                                 batch_size=args.batch_size,
+#                                 shuffle=False,
+#                                 num_workers=num_workers)
+#     if finetune:
+#         syn_dataset = __factory[args.dataset_name](root=args.root_dir)
+#     else:
+#         syn_dataset = __factory[args.pretrain](root=args.root_dir)
+#     # 微调的时候用的15%掩码的常规版本  
+#     train_set = DynamicMaskingDataset(
+#         syn_dataset.train,
+#         train_transforms,
+#         text_length=args.text_length,
+#         p=0.15,  # 基础遮蔽概率
+#         alpha=0.5  # 抑制因子系数
+#     )
+#     num_classes = len(syn_dataset.train)
 
-    logger.info('using random sampler')
-    train_loader = DataLoader(train_set,
-                                batch_size=args.batch_size,
-                                shuffle=True,
-                                num_workers=num_workers,
-                                )
+#     logger.info('using random sampler')
+#     train_loader = DataLoader(train_set,
+#                                 batch_size=args.batch_size,
+#                                 shuffle=True,
+#                                 num_workers=num_workers,
+#                                 )
 
-    return syn_dataset.train, train_loader, val_img_loader0, val_txt_loader0, val_img_loader1, val_txt_loader1, val_img_loader2, val_txt_loader2, num_classes
+#     return syn_dataset.train, train_loader, val_img_loader0, val_txt_loader0, val_img_loader1, val_txt_loader1, val_img_loader2, val_txt_loader2, num_classes
+
 
 # 通过微调的时候测试filterDataset 发现预训练和微调的时候的数据加载方式不一样
 def build_zero_shot_loader_filter(args, finetune=False):

@@ -1,5 +1,5 @@
 #!/bin/bash
-DATASET_NAME="CUHK-PEDES"
+DATASET_NAME="ICFG-PEDES"
 
 CUDA_VISIBLE_DEVICES=0 \
 python finetune.py \
@@ -9,6 +9,6 @@ python finetune.py \
 --MLM \
 --dataset_name $DATASET_NAME \
 --loss_names 'sdm+id+mlm' \
---num_epoch 60 \
+--num_epoch 30 \
 --root_dir /home/wangrui/code/MLLM4Text-ReID-main/data \
---finetune /home/wangrui/code/MLLM4Text-ReID-main/checkpoint/best0.pth
+--finetune /home/wangrui/code/MLLM4Text-ReID-main/checkpoint/best1.pth

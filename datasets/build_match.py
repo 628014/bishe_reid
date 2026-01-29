@@ -10,7 +10,8 @@ from torch.utils.data.distributed import DistributedSampler
 from utils.comm import get_world_size
 
 from .bases import FilterDataset, ImageDataset, TextDataset, ImageTextDataset, ImageTextMLMDataset
-from processor.processor_finetune_match import ImageTextMLMDatasetMatch
+# from processor.processor_finetune_match import ImageTextMLMDatasetMatch
+from .bases_dynamic_masking import DynamicMaskingDataset
 
 from .cuhkpedes import CUHKPEDES
 from .icfgpedes import ICFGPEDES
@@ -184,7 +185,99 @@ def build_dataloader(args, tranforms=None):
         return test_img_loader, test_txt_loader, num_classes
 
 
-def build_zero_shot_loader(args, finetune=False):
+def build_zero_shot_loader_match_score_and_dynamic_masking(args, finetune=False):
+    """
+    直接返回解包后的9个变量，并使用DynamicMaskingDataset
+    """
+    logger = logging.getLogger("IRRA.dataset")
+
+    num_workers = args.num_workers
+    dataset0 = __factory['CUHK-PEDES'](root=args.root_dir)
+    dataset1 = __factory['ICFG-PEDES'](root=args.root_dir)
+    dataset2 = __factory['RSTPReid'](root=args.root_dir)
+
+    train_transforms = build_transforms(img_size=args.img_size,
+                                            aug=args.img_aug,
+                                            is_train=True)
+    val_transforms = build_transforms(img_size=args.img_size,
+                                          is_train=False)
+    
+    # 1. CUHK-PEDES 验证集
+    ds = dataset0.test
+    val_img_set = ImageDataset(ds['image_pids'], ds['img_paths'],
+                                val_transforms)
+    val_txt_set = TextDataset(ds['caption_pids'],
+                                ds['captions'],
+                                text_length=args.text_length)
+    val_img_loader0 = DataLoader(val_img_set,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                num_workers=num_workers)
+    val_txt_loader0 = DataLoader(val_txt_set,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                num_workers=num_workers)
+    
+    # 2. ICFG-PEDES 验证集
+    ds = dataset1.test
+    val_img_set = ImageDataset(ds['image_pids'], ds['img_paths'],
+                                val_transforms)
+    val_txt_set = TextDataset(ds['caption_pids'],
+                                ds['captions'],
+                                text_length=args.text_length)
+    val_img_loader1 = DataLoader(val_img_set,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                num_workers=num_workers)
+    val_txt_loader1 = DataLoader(val_txt_set,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                num_workers=num_workers)
+    
+    # 3. RSTPReid 验证集
+    ds = dataset2.test
+    val_img_set = ImageDataset(ds['image_pids'], ds['img_paths'],
+                                val_transforms)
+    val_txt_set = TextDataset(ds['caption_pids'],
+                                ds['captions'],
+                                text_length=args.text_length)
+    val_img_loader2 = DataLoader(val_img_set,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                num_workers=num_workers)
+    val_txt_loader2 = DataLoader(val_txt_set,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                num_workers=num_workers)
+    
+    # 4. 训练集构建
+    if finetune:
+        syn_dataset = __factory[args.dataset_name](root=args.root_dir)
+    else:
+        syn_dataset = __factory[args.pretrain](root=args.root_dir)
+        
+    # 使用DynamicMaskingDataset类，支持返回match_score字段和动态遮蔽
+    # 注意：这里需要确保 args 传入了 DynamicMaskingDataset 所需的参数，或者使用默认值
+    train_set = DynamicMaskingDataset(syn_dataset.train,
+                            train_transforms,
+                            text_length=args.text_length)
+    num_classes = len(syn_dataset.train)
+
+    logger.info('using random sampler')
+    train_loader = DataLoader(train_set,
+                                batch_size=args.batch_size,
+                                shuffle=True,
+                                num_workers=num_workers,
+                                drop_last=True # 建议加上 drop_last 防止最后一个 batch size 不一致导致 BN 报错
+                                )
+
+    return syn_dataset.train, train_loader, val_img_loader0, val_txt_loader0, val_img_loader1, val_txt_loader1, val_img_loader2, val_txt_loader2, num_classes
+
+
+"""
+# 微调的时候的数据加载方式、同时在3个数据集上微调，用的也是传统的MLM
+"""
+def build_zero_shot_loader_orignal(args, finetune=False):
     logger = logging.getLogger("IRRA.dataset")
 
     num_workers = args.num_workers
@@ -246,8 +339,8 @@ def build_zero_shot_loader(args, finetune=False):
         syn_dataset = __factory[args.dataset_name](root=args.root_dir)
     else:
         syn_dataset = __factory[args.pretrain](root=args.root_dir)
-    # 使用ImageTextMLMDatasetMatch类，支持返回match_score字段
-    train_set = ImageTextMLMDatasetMatch(syn_dataset.train,
+    # 微调的时候用的15%掩码的常规版本  
+    train_set = ImageTextMLMDataset(syn_dataset.train,
                             train_transforms,
                             text_length=args.text_length)
     num_classes = len(syn_dataset.train)
@@ -260,6 +353,8 @@ def build_zero_shot_loader(args, finetune=False):
                                 )
 
     return syn_dataset.train, train_loader, val_img_loader0, val_txt_loader0, val_img_loader1, val_txt_loader1, val_img_loader2, val_txt_loader2, num_classes
+
+
 
 def build_filter_loader(args, dataset):
     logger = logging.getLogger("IRRA.dataset")
